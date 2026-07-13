@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Task Board - To-Do Application</title>
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://apis.google.com https://www.googleapis.com;">
     <!-- Google Identity Services for OAuth2 -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- Google API Client Library -->
@@ -15,9 +17,6 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-        }
-
-        * {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
 
@@ -1591,24 +1590,42 @@ REPLACE
                     
                     let totalTasksLoaded = 0;
                     
-                    // Load tasks from all task lists
+                    // Load tasks from all task lists (with pagination support)
                     for (const taskList of googleTaskLists) {
                         try {
-                            const response = await window.gapi.client.tasks.tasks.list({
-                                tasklist: taskList.id,
-                                showCompleted: true,
-                                showDeleted: false,
-                                maxResults: 100
-                            });
+                            let allTasks = [];
+                            let nextPageToken = null;
                             
-                            const googleTasks = response.result.items || [];
-                            console.log(`Loaded ${googleTasks.length} tasks from list: ${taskList.title}`);
+                            // Paginate through all tasks
+                            do {
+                                const requestParams = {
+                                    tasklist: taskList.id,
+                                    showCompleted: true,
+                                    showDeleted: false,
+                                    maxResults: 100
+                                };
+                                
+                                if (nextPageToken) {
+                                    requestParams.pageToken = nextPageToken;
+                                }
+                                
+                                const response = await window.gapi.client.tasks.tasks.list(requestParams);
+                                
+                                const tasksPage = response.result.items || [];
+                                allTasks = allTasks.concat(tasksPage);
+                                nextPageToken = response.result.nextPageToken;
+                                
+                                console.log(`Loaded ${tasksPage.length} tasks from list: ${taskList.title} (page)`);
+                            } while (nextPageToken);
+                            
+                            console.log(`Total ${allTasks.length} tasks from list: ${taskList.title}`);
                             
                             // Merge tasks from this list
-                            mergeGoogleTasks(googleTasks, taskList.id);
-                            totalTasksLoaded += googleTasks.length;
+                            mergeGoogleTasks(allTasks, taskList.id);
+                            totalTasksLoaded += allTasks.length;
                         } catch (err) {
                             console.error(`Failed to load tasks from list ${taskList.title}:`, err);
+                            showToast(`Failed to load tasks from "${taskList.title}": ${err.message}`, 'error');
                         }
                     }
                     
@@ -1717,26 +1734,39 @@ REPLACE
                     // Then push local changes to Google
                     let createdCount = 0;
                     let updatedCount = 0;
+                    let failedCount = 0;
                     
                     for (const task of tasks) {
                         if (task.status === 'archived') continue; // Don't sync archived tasks
                         
-                        if (task.googleId) {
-                            // Update existing Google task
-                            const needsUpdate = await updateGoogleTask(task);
-                            if (needsUpdate) updatedCount++;
-                        } else {
-                            // Create new Google task
-                            const created = await createGoogleTask(task);
-                            if (created) createdCount++;
+                        try {
+                            if (task.googleId) {
+                                // Update existing Google task
+                                const needsUpdate = await updateGoogleTask(task);
+                                if (needsUpdate) updatedCount++;
+                            } else {
+                                // Create new Google task
+                                const created = await createGoogleTask(task);
+                                if (created) createdCount++;
+                            }
+                        } catch (err) {
+                            failedCount++;
+                            console.error(`Failed to sync task ${task.id}:`, err);
                         }
                     }
                     
-                    updateSyncStatus(`Synced: ${createdCount} created, ${updatedCount} updated`, 'success');
-                    showToast(`Sync complete: ${createdCount} created, ${updatedCount} updated`, 'success');
+                    if (failedCount > 0) {
+                        updateSyncStatus(`Synced with errors: ${failedCount} failed`, 'error');
+                        showToast(`Sync completed with ${failedCount} errors. ${createdCount} created, ${updatedCount} updated`, 'error');
+                    } else {
+                        updateSyncStatus(`Synced: ${createdCount} created, ${updatedCount} updated`, 'success');
+                        showToast(`Sync complete: ${createdCount} created, ${updatedCount} updated`, 'success');
+                    }
                     
                     // Clear unsynced changes flag on successful sync
-                    clearUnsyncedChanges();
+                    if (failedCount === 0) {
+                        clearUnsyncedChanges();
+                    }
                     
                 } catch (err) {
                     console.error('Sync error:', err);
@@ -1779,6 +1809,7 @@ REPLACE
                     return true;
                 } catch (err) {
                     console.error('Failed to create Google task:', err);
+                    showToast(`Failed to create task: ${err.message}`, 'error');
                     return false;
                 }
             }
@@ -1815,6 +1846,10 @@ REPLACE
                     if (err.status === 404) {
                         task.googleId = null;
                         task.googleEtag = null;
+                    } else if (err.status === 429) {
+                        showToast('Rate limited. Please wait before syncing.', 'error');
+                    } else {
+                        showToast(`Failed to update task: ${err.message}`, 'error');
                     }
                     return false;
                 }
@@ -1831,6 +1866,9 @@ REPLACE
                     return true;
                 } catch (err) {
                     console.error('Failed to delete Google task:', err);
+                    if (err.status !== 404) { // Ignore 404 (already deleted)
+                        showToast(`Failed to delete task: ${err.message}`, 'error');
+                    }
                     return false;
                 }
             }
@@ -1841,6 +1879,12 @@ REPLACE
             }
 
             function handleLogin() {
+                // Check if online before attempting login
+                if (!navigator.onLine) {
+                    showToast('You are offline. Please connect to the internet to sign in.', 'error');
+                    return;
+                }
+                
                 // Trigger Google Sign-In flow
                 window.google.accounts.id.prompt((notification) => {
                     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
@@ -2022,8 +2066,8 @@ REPLACE
                     <div class="task-title">${escapeHtml(task.title)}</div>
                     ${metaHtml ? `<div class="task-meta">${metaHtml}</div>` : ''}
                     <div class="task-actions">
-                        <button class="task-action-btn edit-btn" data-task-id="${task.id}" aria-label="Edit ${escapeHtml(task.title)}">Edit</button>
-                        <button class="task-action-btn delete-btn" data-task-id="${task.id}" aria-label="Delete ${escapeHtml(task.title)}">Delete</button>
+                        <button class="task-action-btn edit-btn" data-task-id="${escapeHtml(task.id)}" aria-label="Edit ${escapeHtml(task.title)}">Edit</button>
+                        <button class="task-action-btn delete-btn" data-task-id="${escapeHtml(task.id)}" aria-label="Delete ${escapeHtml(task.title)}">Delete</button>
                     </div>
                 `;
 
@@ -2239,11 +2283,19 @@ REPLACE
                         
                         // If task list changed and we have Google ID, we need to move the task in Google
                         if (oldTaskListId !== taskData.googleTaskListId && tasks[index].googleId) {
+                            // Store metadata before deletion
+                            const taskId = tasks[index].id;
+                            const taskCreatedAt = tasks[index].createdAt;
+                            
                             // Delete from old list and create in new list
                             await deleteGoogleTask(tasks[index]);
                             tasks[index].googleId = null;
                             tasks[index].googleEtag = null;
                             await createGoogleTask(tasks[index]);
+                            
+                            // Restore metadata
+                            tasks[index].id = taskId;
+                            tasks[index].createdAt = taskCreatedAt;
                         }
                         // If status changed to completed and we have Google ID, sync to Google
                         else if (oldStatus !== 'completed' && taskData.status === 'completed' && tasks[index].googleId) {
@@ -2549,6 +2601,19 @@ REPLACE
                         e.returnValue = 'You have unsynced changes. Are you sure you want to leave?';
                         return e.returnValue;
                     }
+                });
+                
+                // Add online/offline detection
+                window.addEventListener('online', () => {
+                    showToast('You are back online', 'success');
+                    // Auto-sync when coming back online
+                    if (googleAuthToken && hasUnsyncedChanges) {
+                        syncToGoogle();
+                    }
+                });
+                
+                window.addEventListener('offline', () => {
+                    showToast('You are now offline. Changes will be saved locally.', 'error');
                 });
                 
                 // Initialize Google Auth
