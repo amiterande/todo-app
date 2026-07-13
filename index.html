@@ -1515,6 +1515,18 @@ REPLACE
 
             async function loadTaskLists() {
                 try {
+                    // Wait for Tasks API to be ready (with timeout)
+                    const maxWait = 5000; // 5 seconds
+                    const startTime = Date.now();
+                    
+                    while (!window.gapi.client.tasks && (Date.now() - startTime) < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    if (!window.gapi.client.tasks) {
+                        throw new Error('Google Tasks API not initialized. Please refresh the page and try again.');
+                    }
+                    
                     const response = await window.gapi.client.tasks.tasklists.list();
                     googleTaskLists = response.result.items || [];
                     
