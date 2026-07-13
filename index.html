@@ -1802,6 +1802,17 @@ REPLACE
 
             async function createGoogleTask(task) {
                 try {
+                    // Wait for Tasks API to be ready
+                    const maxWait = 5000;
+                    const startTime = Date.now();
+                    while (!window.gapi.client.tasks && (Date.now() - startTime) < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    if (!window.gapi.client.tasks) {
+                        throw new Error('Google Tasks API not initialized');
+                    }
+                    
                     const taskListId = task.googleTaskListId || defaultTaskListId;
                     
                     const gtask = {
@@ -1835,6 +1846,17 @@ REPLACE
 
             async function updateGoogleTask(task) {
                 try {
+                    // Wait for Tasks API to be ready
+                    const maxWait = 5000;
+                    const startTime = Date.now();
+                    while (!window.gapi.client.tasks && (Date.now() - startTime) < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    if (!window.gapi.client.tasks) {
+                        throw new Error('Google Tasks API not initialized');
+                    }
+                    
                     // Check if local task is newer than Google version
                     // For simplicity, always update if status changed to completed
                     const gtask = {
@@ -1878,6 +1900,17 @@ REPLACE
                 if (!task.googleId) return true;
                 
                 try {
+                    // Wait for Tasks API to be ready
+                    const maxWait = 5000;
+                    const startTime = Date.now();
+                    while (!window.gapi.client.tasks && (Date.now() - startTime) < maxWait) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                    
+                    if (!window.gapi.client.tasks) {
+                        throw new Error('Google Tasks API not initialized');
+                    }
+                    
                     await window.gapi.client.tasks.tasks.delete({
                         tasklist: task.googleTaskListId || defaultTaskListId,
                         task: task.googleId
