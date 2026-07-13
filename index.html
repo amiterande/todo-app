@@ -1287,6 +1287,10 @@ REPLACE
             let defaultTaskListId = null;
             let isSyncing = false;
             let syncInProgress = false;
+            
+            // Persistent session state
+            const SESSION_STORAGE_KEY = 'taskBoardSession';
+            let sessionRestored = false;
 
             // DOM Elements
             const board = document.getElementById('board');
@@ -1486,6 +1490,9 @@ REPLACE
                 syncBtn.disabled = false;
                 syncStatus.style.display = 'flex';
                 updateSyncStatus('Ready to sync', 'info');
+                
+                // Save session for persistent sign-in
+                saveSession();
                 
                 // Load task lists and tasks
                 loadTaskLists();
@@ -1915,6 +1922,9 @@ REPLACE
                 googleTaskLists = [];
                 defaultTaskListId = null;
                 
+                // Clear session
+                clearSession();
+                
                 // Update UI
                 authSection.style.display = 'block';
                 userSection.style.display = 'none';
@@ -1931,6 +1941,51 @@ REPLACE
                 saveTasks();
                 renderBoard();
                 showToast('Signed out from Google Tasks', 'info');
+            }
+
+            // ============================================
+            // SESSION MANAGEMENT
+            // ============================================
+            function saveSession() {
+                try {
+                    if (googleUser) {
+                        const session = {
+                            user: googleUser,
+                            timestamp: Date.now()
+                        };
+                        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+                    }
+                } catch (e) {
+                    console.error('Failed to save session:', e);
+                }
+            }
+
+            function loadSession() {
+                try {
+                    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+                    if (stored) {
+                        const session = JSON.parse(stored);
+                        const sessionAge = Date.now() - session.timestamp;
+                        const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+                        
+                        if (sessionAge < maxAge && session.user) {
+                            return session.user;
+                        } else {
+                            localStorage.removeItem(SESSION_STORAGE_KEY);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load session:', e);
+                }
+                return null;
+            }
+
+            function clearSession() {
+                try {
+                    localStorage.removeItem(SESSION_STORAGE_KEY);
+                } catch (e) {
+                    console.error('Failed to clear session:', e);
+                }
             }
 
             // ============================================
@@ -2618,6 +2673,14 @@ REPLACE
                 
                 // Initialize Google Auth
                 await initGoogleAuth();
+                
+                // Try to restore session after auth initialization
+                const savedUser = loadSession();
+                if (savedUser && !googleUser) {
+                    console.log('Found saved session, user needs to sign in again to restore token');
+                    // Note: We can't restore the OAuth token for security reasons
+                    // The user will need to click sign in, but Google may auto-select their account
+                }
             }
 
             // Initialize
