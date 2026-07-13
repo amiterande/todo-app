@@ -1,0 +1,2577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Board - To-Do Application</title>
+    <!-- Google Identity Services for OAuth2 -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google API Client Library -->
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <!-- Google Config (copy config.js to config.local.js and fill in your credentials) -->
+    <script src="config.local.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        * {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        body {
+            background: #f4f5f7;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding: 0 8px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #172b4d;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .add-task-btn {
+            background: #0052cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .add-task-btn:hover {
+            background: #0065ff;
+        }
+
+        .add-task-btn:active {
+            background: #0052cc;
+        }
+
+        .add-task-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .sync-btn {
+            background: white;
+            color: #172b4d;
+            border: 1px solid #dfe1e6;
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .sync-btn:hover {
+            background: #f4f5f7;
+        }
+
+        .sync-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sync-btn.syncing {
+            background: #e8f0fe;
+            border-color: #0052cc;
+            color: #0052cc;
+        }
+
+        .sync-btn.dirty {
+            background: #fff3cd;
+            border-color: #ff991f;
+            color: #b54708;
+        }
+
+        .sync-btn.dirty:hover {
+            background: #ffeb9c;
+        }
+
+        .sync-btn.dirty::after {
+            content: '';
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #de350b;
+            margin-left: 4px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .sync-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .sync-btn .spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .login-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .login-btn:hover {
+            background: #3367d6;
+        }
+
+        .login-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #172b4d;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+        }
+
+        .logout-btn {
+            background: none;
+            border: 1px solid #dfe1e6;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #5e6c84;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #f4f5f7;
+            color: #172b4d;
+        }
+
+        .board {
+            display: flex;
+            gap: 16px;
+            height: calc(100vh - 140px);
+            min-height: 600px;
+            overflow-x: auto;
+            padding-bottom: 20px;
+        }
+
+        .column {
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+            background: #ebecf0;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-height: calc(100vh - 140px);
+        }
+
+        .column-header {
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .column-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #172b4d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .column-title svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .task-count {
+            background: #0052cc;
+            color: white;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 12px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 200px;
+        }
+
+        .column-content.drag-over {
+            background: rgba(0, 82, 204, 0.1);
+            border-radius: 8px;
+        }
+
+        .task-card {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 1px 2px rgba(9, 30, 66, 0.15);
+            cursor: grab;
+            transition: box-shadow 0.2s, transform 0.2s;
+            border: 1px solid #dfe1e6;
+        }
+
+        .task-card:hover {
+            box-shadow: 0 4px 8px rgba(9, 30, 66, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .task-card.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+            transform: rotate(3deg);
+        }
+
+        .task-card.drag-over {
+            border: 2px dashed #0052cc;
+            background: rgba(0, 82, 204, 0.05);
+        }
+
+        .task-card.google-task {
+            border-left: 3px solid #4285f4;
+        }
+
+        .task-card.google-task .task-title::before {
+            content: '';
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234285f4'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/%3E%3C/svg%3E");
+            background-size: contain;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .task-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #172b4d;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .task-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .task-meta-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #5e6c84;
+        }
+
+        .task-meta-item svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            color: #5e6c84;
+        }
+
+        .task-due-date.overdue {
+            color: #de350b;
+        }
+
+        .task-due-date.overdue svg {
+            color: #de350b;
+        }
+
+        .task-due-date.today {
+            color: #ff991f;
+        }
+
+        .task-due-date.today svg {
+            color: #ff991f;
+        }
+
+        .task-notes {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-size: 12px;
+            color: #5e6c84;
+            line-height: 1.4;
+            background: #f4f5f7;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-top: 4px;
+        }
+
+        .task-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #dfe1e6;
+        }
+
+        .task-action-btn {
+            flex: 1;
+            padding: 6px 12px;
+            border: 1px solid #dfe1e6;
+            background: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #172b4d;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .task-action-btn:hover {
+            background: #f4f5f7;
+            border-color: #dfe1e6;
+        }
+
+        .task-action-btn.delete:hover {
+            background: #fff5f5;
+            border-color: #de350b;
+            color: #de350b;
+        }
+
+        .add-task-footer {
+            padding: 8px 12px 16px;
+        }
+
+        .add-task-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #5e6c84;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .add-task-link:hover {
+            background: rgba(9, 30, 66, 0.08);
+            color: #172b4d;
+        }
+
+        .add-task-link svg {
+            width: 16px;
+            height: 16px;
+            color: #5e6c84;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(9, 30, 66, 0.54);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s, visibility 0.2s;
+            padding: 20px;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            transform: scale(0.95);
+            transition: transform 0.2s;
+            box-shadow: 0 8px 30px rgba(9, 30, 66, 0.25);
+        }
+
+        .modal-overlay.open .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #dfe1e6;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #172b4d;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 4px;
+            color: #5e6c84;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #f4f5f7;
+            color: #172b4d;
+        }
+
+        .modal-close svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #172b4d;
+            margin-bottom: 6px;
+        }
+
+        .form-label .required {
+            color: #de350b;
+            margin-left: 4px;
+        }
+
+        .form-input,
+        .form-textarea,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #dfe1e6;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #172b4d;
+            background: white;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input:focus,
+        .form-textarea:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #0052cc;
+            box-shadow: 0 0 0 3px rgba(0, 82, 204, 0.15);
+        }
+
+        .form-input.error,
+        .form-textarea.error {
+            border-color: #de350b;
+        }
+
+        .form-input.error:focus,
+        .form-textarea.error:focus {
+            box-shadow: 0 0 0 3px rgba(222, 53, 11, 0.15);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .form-select {
+            cursor: pointer;
+        }
+
+        .form-error {
+            display: block;
+            color: #de350b;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .form-hint {
+            display: block;
+            color: #5e6c84;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .task-list-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #e8f0fe;
+            color: #0052cc;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-top: 6px;
+        }
+
+        .task-list-badge svg {
+            width: 12px;
+            height: 12px;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 16px 24px 24px;
+            border-top: 1px solid #dfe1e6;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #0052cc;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0065ff;
+        }
+
+        .btn-primary:disabled {
+            background: #a5adba;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #172b4d;
+            border: 1px solid #dfe1e6;
+        }
+
+        .btn-secondary:hover {
+            background: #f4f5f7;
+        }
+
+        .btn-danger {
+            background: #fff5f5;
+            color: #de350b;
+            border: 1px solid #de350b;
+        }
+
+        .btn-danger:hover {
+            background: #de350b;
+            color: white;
+        }
+
+        /* Column colors */
+        .column.not-started .column-title svg {
+            color: #de350b;
+        }
+
+        .column.in-progress .column-title svg {
+            color: #ff991f;
+        }
+
+        .column.completed .column-title svg {
+            color: #00875a;
+        }
+
+        .column.archived .column-title svg {
+            color: #6b778c;
+        }
+
+        /* Task status colors */
+        .task-card.not-started {
+            border-left: 3px solid #de350b;
+        }
+
+        .task-card.in-progress {
+            border-left: 3px solid #ff991f;
+        }
+
+        .task-card.completed {
+            border-left: 3px solid #00875a;
+            opacity: 0.85;
+        }
+
+        .task-card.completed .task-title {
+            text-decoration: line-through;
+            color: #5e6c84;
+        }
+
+        .task-card.archived {
+            border-left: 3px solid #6b778c;
+            opacity: 0.7;
+        }
+
+        .task-card.archived .task-title {
+            text-decoration: line-through;
+            color: #6b778c;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #5e6c84;
+            font-size: 14px;
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        /* Scrollbar styling */
+        .column-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .column-content::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .column-content::-webkit-scrollbar-thumb {
+            background: #dfe1e6;
+            border-radius: 3px;
+        }
+
+        .column-content::-webkit-scrollbar-thumb:hover {
+            background: #dfe1e6;
+        }
+
+        /* Drag preview */
+        .drag-preview {
+            box-shadow: 0 8px 30px rgba(9, 30, 66, 0.25);
+            transform: rotate(3deg);
+        }
+
+        /* Collapsible Archived Column */
+        .column.archived.collapsed .column-content,
+        .column.archived.collapsed .add-task-footer {
+            display: none;
+        }
+
+        .column.archived.collapsed {
+            min-height: auto;
+            max-height: none;
+        }
+
+        .column-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            color: #5e6c84;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .column-toggle:hover {
+            background: rgba(9, 30, 66, 0.08);
+            color: #172b4d;
+        }
+
+        .column-toggle svg {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.2s;
+        }
+
+        .column.archived.collapsed .column-toggle svg {
+            transform: rotate(-90deg);
+        }
+
+        .archived-badge {
+            background: #edeff3;
+            color: #6b778c;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Sync status indicator */
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #5e6c84;
+            padding: 8px 12px;
+        }
+
+        .sync-status.success {
+            color: #00875a;
+        }
+
+        .sync-status.error {
+            color: #de350b;
+        }
+
+        .sync-status.syncing {
+            color: #0052cc;
+        }
+
+        .sync-status svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .board {
+                flex-wrap: nowrap;
+            }
+            
+            .column {
+                min-width: 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+            
+            header {
+                flex-direction: column;
+                gap: 16px;
+                align-items: flex-start;
+            }
+
+            .header-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .board {
+                flex-direction: column;
+                height: auto;
+                min-height: auto;
+            }
+            
+            .column {
+                min-width: 100%;
+                max-width: 100%;
+                max-height: none;
+                height: auto;
+                min-height: 300px;
+            }
+            
+            .column-content {
+                max-height: 400px;
+            }
+        }
+
+        /* Focus visible for accessibility */
+        *:focus-visible {
+            outline: 2px solid #0052cc;
+            outline-offset: 2px;
+        }
+
+        .btn:focus-visible,
+        .add-task-btn:focus-visible,
+        .add-task-link:focus-visible,
+        .task-card:focus-visible,
+        .task-action-btn:focus-visible,
+        .modal-close:focus-visible,
+        .column-toggle:focus-visible,
+        .sync-btn:focus-visible,
+        .login-btn:focus-visible,
+        .logout-btn:focus-visible {
+            outline: 2px solid #0052cc;
+            outline-offset: 2px;
+        }
+
+        .form-input:focus-visible,
+        .form-textarea:focus-visible,
+        .form-select:focus-visible {
+            outline: none;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .task-card {
+            animation: slideIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal-overlay.open {
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .toast {
+            background: #172b4d;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(9, 30, 66, 0.25);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 280px;
+            max-width: 400px;
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .toast.success {
+            background: #00875a;
+        }
+
+        .toast.error {
+            background: #de350b;
+        }
+
+        .toast.info {
+            background: #0052cc;
+        }
+
+        .toast svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+
+        .toast.removing {
+            animation: slideOutRight 0.3s ease-in forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>Task Board</h1>
+            <div class="header-actions">
+                <div id="authSection">
+                    <button class="login-btn" id="loginBtn" aria-label="Sign in with Google">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                        </svg>
+                        Sign in with Google
+                    </button>
+                </div>
+                <div id="userSection" style="display: none;">
+                    <div class="user-info">
+                        <img id="userAvatar" class="user-avatar" src="" alt="">
+                        <span id="userName"></span>
+                    </div>
+                    <button class="logout-btn" id="logoutBtn">Sign out</button>
+                </div>
+                <button class="sync-btn" id="syncBtn" aria-label="Sync with Google Tasks" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    <span>Sync</span>
+                </button>
+                <button class="add-task-btn" id="addTaskBtn" aria-label="Add new task">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Task
+                </button>
+            </div>
+        </header>
+
+        <div class="sync-status" id="syncStatus" style="display: none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span id="syncStatusText">Ready to sync</span>
+        </div>
+
+        <div class="board" id="board" role="list" aria-label="Task board with four columns">
+            <!-- Not Started Column -->
+            <section class="column not-started" id="notStartedColumn" role="listitem" aria-label="Not Started tasks">
+                <header class="column-header">
+                    <div class="column-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10"></circle>
+                        </svg>
+                        <span>Not Started</span>
+                    </div>
+                    <span class="task-count" id="notStartedCount">0</span>
+                </header>
+                <div class="column-content" id="notStartedContent" role="list" aria-label="Not Started tasks">
+                    <div class="empty-state" id="notStartedEmpty">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 11l3 3L22 4"></path>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                        <p>No tasks yet</p>
+                        <p style="font-size: 12px; margin-top: 4px;">Click "Add Task" to get started</p>
+                    </div>
+                </div>
+                <footer class="add-task-footer">
+                    <button class="add-task-link" data-column="not-started" aria-label="Add task to Not Started">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Task
+                    </button>
+                </footer>
+            </section>
+
+            <!-- In Progress Column -->
+            <section class="column in-progress" id="inProgressColumn" role="listitem" aria-label="In Progress tasks">
+                <header class="column-header">
+                    <div class="column-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 2v4"></path>
+                            <path d="M12 18v4"></path>
+                            <path d="M4.93 4.93l2.83 2.83"></path>
+                            <path d="M16.24 16.24l2.83 2.83"></path>
+                            <path d="M2 12h4"></path>
+                            <path d="M18 12h4"></path>
+                            <path d="M4.93 19.07l2.83-2.83"></path>
+                            <path d="M16.24 7.76l2.83-2.83"></path>
+                        </svg>
+                        <span>In Progress</span>
+                    </div>
+                    <span class="task-count" id="inProgressCount">0</span>
+                </header>
+                <div class="column-content" id="inProgressContent" role="list" aria-label="In Progress tasks">
+                    <div class="empty-state" id="inProgressEmpty">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M12 2v4"></path>
+                            <path d="M12 18v4"></path>
+                            <path d="M4.93 4.93l2.83 2.83"></path>
+                            <path d="M16.24 16.24l2.83 2.83"></path>
+                            <path d="M2 12h4"></path>
+                            <path d="M18 12h4"></path>
+                            <path d="M4.93 19.07l2.83-2.83"></path>
+                            <path d="M16.24 7.76l2.83-2.83"></path>
+                        </svg>
+                        <p>No tasks in progress</p>
+                    </div>
+                </div>
+                <footer class="add-task-footer">
+                    <button class="add-task-link" data-column="in-progress" aria-label="Add task to In Progress">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Task
+                    </button>
+                </footer>
+            </section>
+
+            <!-- Completed Column -->
+            <section class="column completed" id="completedColumn" role="listitem" aria-label="Completed tasks">
+                <header class="column-header">
+                    <div class="column-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <span>Completed</span>
+                    </div>
+                    <span class="task-count" id="completedCount">0</span>
+                </header>
+                <div class="column-content" id="completedContent" role="list" aria-label="Completed tasks">
+                    <div class="empty-state" id="completedEmpty">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        <p>No completed tasks yet</p>
+                    </div>
+                </div>
+                <footer class="add-task-footer">
+                    <button class="add-task-link" data-column="completed" aria-label="Add task to Completed">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Task
+                    </button>
+                </footer>
+            </section>
+
+            <!-- Archived Column (Completed > 7 days) -->
+            <section class="column archived" id="archivedColumn" role="listitem" aria-label="Archived tasks">
+                <header class="column-header">
+                    <div class="column-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
+                        </svg>
+                        <span>Archived</span>
+                        <span class="archived-badge" id="archivedBadge">Auto</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span class="task-count" id="archivedCount">0</span>
+                        <button class="column-toggle" id="archivedToggle" aria-label="Toggle archived tasks" aria-expanded="false">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                </header>
+                <div class="column-content" id="archivedContent" role="list" aria-label="Archived tasks">
+                    <div class="empty-state" id="archivedEmpty">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                            <rect x="1" y="3" width="22" height="5"></rect>
+                            <line x1="10" y1="12" x2="14" y2="12"></line>
+                        </svg>
+                        <p>No archived tasks</p>
+                        <p style="font-size: 12px; margin-top: 4px;">Tasks completed > 7 days ago appear here automatically</p>
+                    </div>
+                </div>
+                <footer class="add-task-footer">
+                    <button class="add-task-link" data-column="archived" aria-label="Add task to Archived" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Task
+                    </button>
+                </footer>
+            </section>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Task Modal -->
+    <div class="modal-overlay" id="taskModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal">
+            <header class="modal-header">
+                <h2 class="modal-title" id="modalTitle">Add Task</h2>
+                <button class="modal-close" id="modalClose" aria-label="Close modal">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </header>
+            <form class="modal-body" id="taskForm" novalidate>
+                <input type="hidden" id="taskId" name="taskId">
+                <input type="hidden" id="taskStatus" name="taskStatus">
+                <input type="hidden" id="taskGoogleId" name="taskGoogleId">
+                <input type="hidden" id="taskGoogleTaskListId" name="taskGoogleTaskListId">
+                <input type="hidden" id="taskGoogleEtag" name="taskGoogleEtag">
+                
+                <div class="form-group">
+                    <label class="form-label" for="taskTitle">
+                        Task Description <span class="required" aria-hidden="true">*</span>
+                    </label>
+                    <input type="text" class="form-input" id="taskTitle" name="taskTitle" required placeholder="Enter task description" aria-required="true" aria-describedby="titleError">
+                    <span class="form-error" id="titleError" aria-live="polite"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="taskDueDate">Due Date</label>
+                    <input type="date" class="form-input" id="taskDueDate" name="taskDueDate" aria-describedby="dueDateHint">
+                    <span class="form-hint" id="dueDateHint">Optional: Set a due date for this task</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="taskNotes">Notes</label>
+                    <textarea class="form-textarea" id="taskNotes" name="taskNotes" placeholder="Add any notes or details..." aria-describedby="notesHint"></textarea>
+                    <span class="form-hint" id="notesHint">Optional: Add any additional notes</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="taskStatusSelect">Status</label>
+                    <select class="form-select" id="taskStatusSelect" name="taskStatusSelect" aria-describedby="statusHint">
+                        <option value="not-started">Not Started</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                    <span class="form-hint" id="statusHint">Current status of the task</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="taskListSelect">
+                        Task List <span class="required" aria-hidden="true">*</span>
+                    </label>
+                    <select class="form-select" id="taskListSelect" name="taskListSelect" required aria-describedby="taskListHint" aria-required="true">
+                        <option value="">Select a task list...</option>
+                    </select>
+                    <span class="form-hint" id="taskListHint">Select which Google Tasks list this task belongs to (required)</span>
+                    <span class="form-error" id="taskListError" aria-live="polite"></span>
+                </div>
+            </form>
+            <footer class="modal-footer">
+REPLACE
+                <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                <button type="button" class="btn btn-danger" id="deleteBtn" style="display: none;">Delete</button>
+                <button type="button" class="btn btn-primary" id="saveBtn">Save Task</button>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // GOOGLE TASKS INTEGRATION CONFIGURATION
+        // ============================================
+        // Config loaded from config.local.js (copy config.js to config.local.js and fill in credentials)
+        const GOOGLE_CLIENT_ID = window.GOOGLE_CONFIG?.CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+        const GOOGLE_API_KEY = window.GOOGLE_CONFIG?.API_KEY || 'YOUR_GOOGLE_API_KEY'; // Optional: for higher quota
+        const GOOGLE_DISCOVERY_DOC = window.GOOGLE_CONFIG?.DISCOVERY_DOC || 'https://www.googleapis.com/discovery/v1/apis/tasks/v1/rest';
+        const GOOGLE_SCOPES = window.GOOGLE_CONFIG?.SCOPES || 'https://www.googleapis.com/auth/tasks';
+
+        // ============================================
+        // TASK BOARD APPLICATION
+        // ============================================
+        window.TaskBoard = (function() {
+            'use strict';
+
+            // State
+            let tasks = [];
+            let draggedTask = null;
+            let dragOverColumn = null;
+            let editingTaskId = null;
+            let hasUnsyncedChanges = false;
+            
+            // Google Tasks state
+            let googleAuthToken = null;
+            let googleUser = null;
+            let googleTaskLists = [];
+            let defaultTaskListId = null;
+            let isSyncing = false;
+            let syncInProgress = false;
+
+            // DOM Elements
+            const board = document.getElementById('board');
+            const columns = {
+                'not-started': {
+                    column: document.getElementById('notStartedColumn'),
+                    content: document.getElementById('notStartedContent'),
+                    count: document.getElementById('notStartedCount'),
+                    empty: document.getElementById('notStartedEmpty')
+                },
+                'in-progress': {
+                    column: document.getElementById('inProgressColumn'),
+                    content: document.getElementById('inProgressContent'),
+                    count: document.getElementById('inProgressCount'),
+                    empty: document.getElementById('inProgressEmpty')
+                },
+                'completed': {
+                    column: document.getElementById('completedColumn'),
+                    content: document.getElementById('completedContent'),
+                    count: document.getElementById('completedCount'),
+                    empty: document.getElementById('completedEmpty')
+                },
+                'archived': {
+                    column: document.getElementById('archivedColumn'),
+                    content: document.getElementById('archivedContent'),
+                    count: document.getElementById('archivedCount'),
+                    empty: document.getElementById('archivedEmpty')
+                }
+            };
+
+            const modal = document.getElementById('taskModal');
+            const taskForm = document.getElementById('taskForm');
+            const modalTitle = document.getElementById('modalTitle');
+            const taskIdInput = document.getElementById('taskId');
+            const taskStatusInput = document.getElementById('taskStatus');
+            const taskGoogleIdInput = document.getElementById('taskGoogleId');
+            const taskGoogleTaskListIdInput = document.getElementById('taskGoogleTaskListId');
+            const taskGoogleEtagInput = document.getElementById('taskGoogleEtag');
+            const taskTitleInput = document.getElementById('taskTitle');
+            const taskDueDateInput = document.getElementById('taskDueDate');
+            const taskNotesInput = document.getElementById('taskNotes');
+            const taskStatusSelect = document.getElementById('taskStatusSelect');
+            const titleError = document.getElementById('titleError');
+            const saveBtn = document.getElementById('saveBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const deleteBtn = document.getElementById('deleteBtn');
+            const modalClose = document.getElementById('modalClose');
+            const addTaskBtn = document.getElementById('addTaskBtn');
+            const addTaskLinks = document.querySelectorAll('.add-task-link');
+            const archivedToggle = document.getElementById('archivedToggle');
+            const archivedColumn = document.getElementById('archivedColumn');
+            
+            // Google Auth elements
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const authSection = document.getElementById('authSection');
+            const userSection = document.getElementById('userSection');
+            const userAvatar = document.getElementById('userAvatar');
+            const userName = document.getElementById('userName');
+            const syncBtn = document.getElementById('syncBtn');
+            const syncStatus = document.getElementById('syncStatus');
+            const syncStatusText = document.getElementById('syncStatusText');
+            const toastContainer = document.getElementById('toastContainer');
+
+            const statusLabels = {
+                'not-started': 'Not Started',
+                'in-progress': 'In Progress',
+                'completed': 'Completed',
+                'archived': 'Archived'
+            };
+
+            // ============================================
+            // TOAST NOTIFICATIONS
+            // ============================================
+            function showToast(message, type = 'info', duration = 4000) {
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                
+                const icons = {
+                    success: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>',
+                    error: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>',
+                    info: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'
+                };
+                
+                toast.innerHTML = `${icons[type]} <span>${message}</span>`;
+                toastContainer.appendChild(toast);
+                
+                setTimeout(() => {
+                    toast.classList.add('removing');
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+
+            // ============================================
+            // GOOGLE AUTHENTICATION
+            // ============================================
+            async function initGoogleAuth() {
+                return new Promise((resolve) => {
+                    // Wait for Google Identity Services to load
+                    const checkGIS = setInterval(() => {
+                        if (window.google && window.google.accounts) {
+                            clearInterval(checkGIS);
+                            initializeGIS();
+                            resolve();
+                        }
+                    }, 100);
+                });
+            }
+
+            function initializeGIS() {
+                // Initialize Google Identity Services
+                window.google.accounts.id.initialize({
+                    client_id: GOOGLE_CLIENT_ID,
+                    callback: handleGoogleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
+                });
+
+                // Also load the Google API client for Tasks API
+                window.gapi.load('client', initGoogleApiClient);
+            }
+
+            function initGoogleApiClient() {
+                // Build init config - API key is optional (can use OAuth token only)
+                const initConfig = {
+                    discoveryDocs: [GOOGLE_DISCOVERY_DOC],
+                };
+                if (GOOGLE_API_KEY && GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
+                    initConfig.apiKey = GOOGLE_API_KEY;
+                }
+                
+                window.gapi.client.init(initConfig).then(() => {
+                    // Check if user is already signed in
+                    const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                        client_id: GOOGLE_CLIENT_ID,
+                        scope: GOOGLE_SCOPES,
+                        callback: (tokenResponse) => {
+                            if (tokenResponse.access_token) {
+                                googleAuthToken = tokenResponse.access_token;
+                                window.gapi.client.setToken({ access_token: googleAuthToken });
+                                loadUserInfo();
+                                loadTaskLists();
+                            }
+                        }
+                    });
+                    
+                    // Try to get token silently
+                    tokenClient.requestAccessToken({ prompt: '' });
+                }).catch(err => {
+                    console.error('Google API client init failed:', err);
+                    showError('Failed to initialize Google API. Check console for details.');
+                });
+            }
+
+            function handleGoogleCredentialResponse(response) {
+                // This handles the One Tap / Sign in with Google button
+                if (response.credential) {
+                    // Decode JWT to get user info
+                    const payload = JSON.parse(atob(response.credential.split('.')[1]));
+                    googleUser = {
+                        id: payload.sub,
+                        name: payload.name,
+                        email: payload.email,
+                        picture: payload.picture
+                    };
+                    
+                    // Now get OAuth token for Tasks API
+                    requestGoogleTasksToken();
+                }
+            }
+
+            function requestGoogleTasksToken() {
+                const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                    client_id: GOOGLE_CLIENT_ID,
+                    scope: GOOGLE_SCOPES,
+                    callback: (tokenResponse) => {
+                        if (tokenResponse.access_token) {
+                            googleAuthToken = tokenResponse.access_token;
+                            window.gapi.client.setToken({ access_token: googleAuthToken });
+                            onGoogleSignInSuccess();
+                        } else if (tokenResponse.error) {
+                            console.error('Token error:', tokenResponse.error);
+                            showToast('Failed to get Google Tasks access', 'error');
+                        }
+                    }
+                });
+                
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            }
+
+            function onGoogleSignInSuccess() {
+                // Update UI
+                authSection.style.display = 'none';
+                userSection.style.display = 'flex';
+                userAvatar.src = googleUser.picture;
+                userName.textContent = googleUser.name;
+                syncBtn.disabled = false;
+                syncStatus.style.display = 'flex';
+                updateSyncStatus('Ready to sync', 'info');
+                
+                // Load task lists and tasks
+                loadTaskLists();
+                
+                // Sync any unsynced changes
+                syncToGoogle();
+                
+                showToast('Signed in to Google Tasks', 'success');
+            }
+
+            async function loadUserInfo() {
+                try {
+                    const response = await window.gapi.client.oauth2.userinfo.get();
+                    googleUser = response.result;
+                    onGoogleSignInSuccess();
+                } catch (err) {
+                    console.error('Failed to load user info:', err);
+                }
+            }
+
+            async function loadTaskLists() {
+                try {
+                    const response = await window.gapi.client.tasks.tasklists.list();
+                    googleTaskLists = response.result.items || [];
+                    
+                    console.log('Available Google Task Lists:', googleTaskLists.map(l => ({title: l.title, id: l.id})));
+                    
+                    // Find or create default task list (flexible matching)
+                    let defaultList = googleTaskLists.find(list => {
+                        const title = list.title.toLowerCase();
+                        return title === 'daily running tasks' || 
+                               title === 'daily running task list' ||
+                               title === 'my tasks' ||
+                               title.includes('daily running') ||
+                               title.includes('running task');
+                    });
+                    
+                    if (!defaultList && googleTaskLists.length > 0) {
+                        defaultList = googleTaskLists[0]; // Use first list
+                        console.log('Using first available list:', defaultList.title);
+                    }
+                    
+                    if (!defaultList) {
+                        // Create a default task list
+                        console.log('No matching task lists found, creating "Daily Running Tasks"');
+                        defaultList = await createTaskList('Daily Running Tasks');
+                    } else {
+                        console.log('Using task list:', defaultList.title, '(ID:', defaultList.id + ')');
+                    }
+                    
+                    defaultTaskListId = defaultList.id;
+                    
+                    // Populate task list dropdown
+                    populateTaskListDropdown();
+                    
+                    await loadGoogleTasks();
+                } catch (err) {
+                    console.error('Failed to load task lists:', err);
+                    showToast('Failed to load Google Tasks lists: ' + err.message, 'error');
+                }
+            }
+            
+            function populateTaskListDropdown() {
+                const taskListSelect = document.getElementById('taskListSelect');
+                if (!taskListSelect) return;
+                
+                // Clear existing options except the first one
+                taskListSelect.innerHTML = '<option value="">Select a task list...</option>';
+                
+                // Add all task lists
+                googleTaskLists.forEach(list => {
+                    const option = document.createElement('option');
+                    option.value = list.id;
+                    option.textContent = list.title;
+                    taskListSelect.appendChild(option);
+                });
+                
+                // Set default if available
+                if (defaultTaskListId) {
+                    taskListSelect.value = defaultTaskListId;
+                }
+            }
+
+            async function createTaskList(title) {
+                try {
+                    const response = await window.gapi.client.tasks.tasklists.insert({
+                        title: title
+                    });
+                    googleTaskLists.push(response.result);
+                    return response.result;
+                } catch (err) {
+                    console.error('Failed to create task list:', err);
+                    throw err;
+                }
+            }
+
+            async function loadGoogleTasks() {
+                if (!defaultTaskListId || googleTaskLists.length === 0) return;
+                
+                try {
+                    updateSyncStatus('Loading tasks from Google...', 'syncing');
+                    
+                    let totalTasksLoaded = 0;
+                    
+                    // Load tasks from all task lists
+                    for (const taskList of googleTaskLists) {
+                        try {
+                            const response = await window.gapi.client.tasks.tasks.list({
+                                tasklist: taskList.id,
+                                showCompleted: true,
+                                showDeleted: false,
+                                maxResults: 100
+                            });
+                            
+                            const googleTasks = response.result.items || [];
+                            console.log(`Loaded ${googleTasks.length} tasks from list: ${taskList.title}`);
+                            
+                            // Merge tasks from this list
+                            mergeGoogleTasks(googleTasks, taskList.id);
+                            totalTasksLoaded += googleTasks.length;
+                        } catch (err) {
+                            console.error(`Failed to load tasks from list ${taskList.title}:`, err);
+                        }
+                    }
+                    
+                    console.log('Total Google tasks loaded:', totalTasksLoaded);
+                    renderBoard();
+                    
+                    updateSyncStatus(`Loaded ${totalTasksLoaded} tasks from ${googleTaskLists.length} lists`, 'success');
+                    setTimeout(() => updateSyncStatus('Ready to sync', 'info'), 3000);
+                } catch (err) {
+                    console.error('Failed to load Google tasks:', err);
+                    updateSyncStatus('Failed to load tasks', 'error');
+                    showToast('Failed to load tasks from Google: ' + (err.message || 'Unknown error'), 'error');
+                }
+            }
+
+            function mergeGoogleTasks(googleTasks, taskListId) {
+                // Create a map of existing tasks by Google ID
+                const existingGoogleTasks = new Map();
+                tasks.forEach(task => {
+                    if (task.googleId) {
+                        existingGoogleTasks.set(task.googleId, task);
+                    }
+                });
+                
+                let newTasksCount = 0;
+                let updatedTasksCount = 0;
+                
+                googleTasks.forEach(gtask => {
+                    // Defensive check: skip if gtask is undefined or missing id
+                    if (!gtask || !gtask.id) {
+                        console.warn('Skipping invalid Google task:', gtask);
+                        return;
+                    }
+                    
+                    const existingTask = existingGoogleTasks.get(gtask.id);
+                    
+                    // Safely parse due date - handle string, object, or null
+                    let dueDate = null;
+                    if (gtask.due) {
+                        try {
+                            const dueStr = typeof gtask.due === 'string' ? gtask.due : String(gtask.due);
+                            dueDate = dueStr.split('T')[0];
+                        } catch (e) {
+                            console.warn('Failed to parse due date:', gtask.due, e);
+                            dueDate = null;
+                        }
+                    }
+                    
+                    const taskData = {
+                        id: existingTask?.id || generateId(),
+                        title: gtask.title || 'Untitled',
+                        notes: gtask.notes || null,
+                        dueDate: dueDate,
+                        status: gtask.status === 'completed' ? 'completed' : 'not-started',
+                        googleId: gtask.id,
+                        googleTaskListId: taskListId || defaultTaskListId,
+                        googleEtag: gtask.etag,
+                        updatedAt: gtask.updated ? new Date(gtask.updated).toISOString() : new Date().toISOString(),
+                        createdAt: existingTask?.createdAt || new Date().toISOString()
+                    };
+                    
+                    if (existingTask) {
+                        // Update existing task
+                        const index = tasks.findIndex(t => t.id === existingTask.id);
+                        if (index !== -1) {
+                            // Preserve local status if it's more recent (but sync completed status)
+                            if (gtask.status === 'completed' && existingTask.status !== 'completed') {
+                                taskData.status = 'completed';
+                            } else if (existingTask.status === 'completed' && gtask.status !== 'completed') {
+                                // Local says completed, Google says not - keep local completed
+                                taskData.status = 'completed';
+                            }
+                            tasks[index] = { ...tasks[index], ...taskData };
+                            updatedTasksCount++;
+                        }
+                    } else {
+                        // New task from Google
+                        tasks.push(taskData);
+                        newTasksCount++;
+                    }
+                    
+                    existingGoogleTasks.delete(gtask.id);
+                });
+                
+                // Tasks that exist locally but not in Google - keep them (they might be local-only)
+                // Optionally, you could mark them for deletion or keep as local-only
+                
+                saveTasks();
+                
+                return { newTasksCount, updatedTasksCount };
+            }
+
+            async function syncToGoogle() {
+                if (isSyncing || !googleAuthToken) return;
+                
+                isSyncing = true;
+                syncBtn.disabled = true;
+                syncBtn.classList.add('syncing');
+                syncBtn.querySelector('span').textContent = 'Syncing...';
+                updateSyncStatus('Syncing with Google...', 'syncing');
+                
+                try {
+                    // First, load latest from Google to avoid conflicts
+                    await loadGoogleTasks();
+                    
+                    // Then push local changes to Google
+                    let createdCount = 0;
+                    let updatedCount = 0;
+                    
+                    for (const task of tasks) {
+                        if (task.status === 'archived') continue; // Don't sync archived tasks
+                        
+                        if (task.googleId) {
+                            // Update existing Google task
+                            const needsUpdate = await updateGoogleTask(task);
+                            if (needsUpdate) updatedCount++;
+                        } else {
+                            // Create new Google task
+                            const created = await createGoogleTask(task);
+                            if (created) createdCount++;
+                        }
+                    }
+                    
+                    updateSyncStatus(`Synced: ${createdCount} created, ${updatedCount} updated`, 'success');
+                    showToast(`Sync complete: ${createdCount} created, ${updatedCount} updated`, 'success');
+                    
+                    // Clear unsynced changes flag on successful sync
+                    clearUnsyncedChanges();
+                    
+                } catch (err) {
+                    console.error('Sync error:', err);
+                    updateSyncStatus('Sync failed', 'error');
+                    showToast('Sync failed: ' + err.message, 'error');
+                } finally {
+                    isSyncing = false;
+                    syncBtn.disabled = false;
+                    syncBtn.classList.remove('syncing');
+                    syncBtn.querySelector('span').textContent = 'Sync';
+                    setTimeout(() => updateSyncStatus('Ready to sync', 'info'), 3000);
+                }
+            }
+
+            async function createGoogleTask(task) {
+                try {
+                    const taskListId = task.googleTaskListId || defaultTaskListId;
+                    
+                    const gtask = {
+                        title: task.title,
+                        notes: task.notes || '',
+                        status: task.status === 'completed' ? 'completed' : 'needsAction'
+                    };
+                    
+                    if (task.dueDate) {
+                        // Format as RFC 3339 timestamp (end of day)
+                        gtask.due = new Date(task.dueDate + 'T23:59:59').toISOString();
+                    }
+                    
+                    const response = await window.gapi.client.tasks.tasks.insert({
+                        tasklist: taskListId,
+                        resource: gtask
+                    });
+                    
+                    // Update local task with Google ID and etag
+                    task.googleId = response.result.id;
+                    task.googleTaskListId = taskListId;
+                    task.googleEtag = response.result.etag;
+                    
+                    return true;
+                } catch (err) {
+                    console.error('Failed to create Google task:', err);
+                    return false;
+                }
+            }
+
+            async function updateGoogleTask(task) {
+                try {
+                    // Check if local task is newer than Google version
+                    // For simplicity, always update if status changed to completed
+                    const gtask = {
+                        id: task.googleId,
+                        title: task.title,
+                        notes: task.notes || '',
+                        status: task.status === 'completed' ? 'completed' : 'needsAction',
+                        etag: task.googleEtag
+                    };
+                    
+                    if (task.dueDate) {
+                        gtask.due = new Date(task.dueDate + 'T23:59:59').toISOString();
+                    } else {
+                        gtask.due = null;
+                    }
+                    
+                    const response = await window.gapi.client.tasks.tasks.update({
+                        tasklist: task.googleTaskListId || defaultTaskListId,
+                        task: task.googleId,
+                        resource: gtask
+                    });
+                    
+                    task.googleEtag = response.result.etag;
+                    return true;
+                } catch (err) {
+                    console.error('Failed to update Google task:', err);
+                    // If 404, task was deleted in Google - clear googleId
+                    if (err.status === 404) {
+                        task.googleId = null;
+                        task.googleEtag = null;
+                    }
+                    return false;
+                }
+            }
+
+            async function deleteGoogleTask(task) {
+                if (!task.googleId) return true;
+                
+                try {
+                    await window.gapi.client.tasks.tasks.delete({
+                        tasklist: task.googleTaskListId || defaultTaskListId,
+                        task: task.googleId
+                    });
+                    return true;
+                } catch (err) {
+                    console.error('Failed to delete Google task:', err);
+                    return false;
+                }
+            }
+
+            function updateSyncStatus(message, type) {
+                syncStatusText.textContent = message;
+                syncStatus.className = 'sync-status ' + type;
+            }
+
+            function handleLogin() {
+                // Trigger Google Sign-In flow
+                window.google.accounts.id.prompt((notification) => {
+                    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+                        // Fallback to button click
+                        window.google.accounts.id.renderButton(loginBtn, {
+                            theme: 'outline',
+                            size: 'large',
+                            type: 'standard',
+                            text: 'signin_with',
+                            shape: 'rectangular',
+                            logo_alignment: 'left'
+                        });
+                    }
+                });
+            }
+
+            function handleLogout() {
+                // Revoke token
+                if (googleAuthToken) {
+                    window.google.accounts.oauth2.revoke(googleAuthToken, () => {
+                        console.log('Token revoked');
+                    });
+                }
+                
+                // Clear state
+                googleAuthToken = null;
+                googleUser = null;
+                googleTaskLists = [];
+                defaultTaskListId = null;
+                
+                // Update UI
+                authSection.style.display = 'block';
+                userSection.style.display = 'none';
+                syncBtn.disabled = true;
+                syncStatus.style.display = 'none';
+                
+                // Clear Google-specific task data but keep local tasks
+                tasks.forEach(task => {
+                    task.googleId = null;
+                    task.googleTaskListId = null;
+                    task.googleEtag = null;
+                });
+                
+                saveTasks();
+                renderBoard();
+                showToast('Signed out from Google Tasks', 'info');
+            }
+
+            // ============================================
+            // LOCAL STORAGE
+            // ============================================
+            function loadTasks() {
+                try {
+                    const stored = localStorage.getItem('taskBoardTasks');
+                    if (stored) {
+                        tasks = JSON.parse(stored);
+                    }
+                } catch (e) {
+                    console.error('Failed to load tasks:', e);
+                    tasks = [];
+                }
+            }
+
+            function saveTasks() {
+                try {
+                    localStorage.setItem('taskBoardTasks', JSON.stringify(tasks));
+                } catch (e) {
+                    console.error('Failed to save tasks:', e);
+                }
+            }
+
+            // ============================================
+            // UTILITY FUNCTIONS
+            // ============================================
+            function generateId() {
+                return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            }
+
+            function formatDate(dateString) {
+                const date = new Date(dateString + 'T00:00:00');
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                const options = { month: 'short', day: 'numeric' };
+                const formatted = date.toLocaleDateString('en-US', options);
+
+                if (date.getTime() === today.getTime()) {
+                    return `Today, ${formatted}`;
+                } else if (date.getTime() === tomorrow.getTime()) {
+                    return `Tomorrow, ${formatted}`;
+                } else if (date < today) {
+                    return `${formatted} (Overdue)`;
+                }
+                return formatted;
+            }
+
+            function isOverdue(dateString) {
+                const date = new Date(dateString + 'T00:00:00');
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return date < today;
+            }
+
+            function isToday(dateString) {
+                const date = new Date(dateString + 'T00:00:00');
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return date.getTime() === today.getTime();
+            }
+
+            function shouldArchive(task) {
+                if (task.status !== 'completed' || !task.updatedAt) return false;
+                const completedDate = new Date(task.updatedAt);
+                const now = new Date();
+                const diffTime = now - completedDate;
+                const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                return diffDays > 7;
+            }
+
+            function autoArchiveTasks() {
+                let changed = false;
+                tasks.forEach(task => {
+                    if (shouldArchive(task)) {
+                        task.status = 'archived';
+                        changed = true;
+                    }
+                });
+                if (changed) {
+                    saveTasks();
+                }
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // ============================================
+            // RENDERING
+            // ============================================
+            function createTaskCard(task) {
+                const card = document.createElement('div');
+                const isGoogleTask = task.googleId ? ' google-task' : '';
+                card.className = `task-card ${task.status}${isGoogleTask}`;
+                card.draggable = true;
+                card.dataset.taskId = task.id;
+                card.setAttribute('role', 'listitem');
+                card.setAttribute('aria-label', `${task.title}, ${statusLabels[task.status]}, ${task.dueDate ? `Due ${formatDate(task.dueDate)}` : 'No due date'}${isGoogleTask ? ', synced with Google Tasks' : ''}`);
+
+                let metaHtml = '';
+                if (task.dueDate) {
+                    const overdue = isOverdue(task.dueDate);
+                    const today = isToday(task.dueDate);
+                    metaHtml += `
+                        <div class="task-meta-item task-due-date ${overdue ? 'overdue' : today ? 'today' : ''}">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                            <span>${formatDate(task.dueDate)}</span>
+                        </div>
+                    `;
+                }
+
+                if (task.notes) {
+                    metaHtml += `
+                        <div class="task-meta-item task-notes">
+                            ${escapeHtml(task.notes)}
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="task-title">${escapeHtml(task.title)}</div>
+                    ${metaHtml ? `<div class="task-meta">${metaHtml}</div>` : ''}
+                    <div class="task-actions">
+                        <button class="task-action-btn edit-btn" data-task-id="${task.id}" aria-label="Edit ${escapeHtml(task.title)}">Edit</button>
+                        <button class="task-action-btn delete-btn" data-task-id="${task.id}" aria-label="Delete ${escapeHtml(task.title)}">Delete</button>
+                    </div>
+                `;
+
+                // Drag events
+                card.addEventListener('dragstart', handleDragStart);
+                card.addEventListener('dragend', handleDragEnd);
+                card.addEventListener('dragover', handleCardDragOver);
+                card.addEventListener('dragleave', handleCardDragLeave);
+                card.addEventListener('drop', handleCardDrop);
+
+                // Click events for edit/delete
+                card.querySelector('.edit-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openEditModal(task.id);
+                });
+
+                card.querySelector('.delete-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteTask(task.id);
+                });
+
+                // Keyboard support
+                card.addEventListener('keydown', handleCardKeyDown);
+
+                return card;
+            }
+
+            function renderBoard() {
+                autoArchiveTasks();
+                
+                Object.keys(columns).forEach(status => {
+                    const columnTasks = tasks.filter(t => t.status === status);
+                    const content = columns[status].content;
+                    const count = columns[status].count;
+                    const empty = columns[status].empty;
+
+                    // Update count
+                    count.textContent = columnTasks.length;
+
+                    // Clear content except empty state
+                    const existingCards = content.querySelectorAll('.task-card');
+                    existingCards.forEach(card => card.remove());
+
+                    // Show/hide empty state
+                    empty.style.display = columnTasks.length === 0 ? 'block' : 'none';
+
+                    // Add task cards
+                    columnTasks.forEach(task => {
+                        const card = createTaskCard(task);
+                        content.insertBefore(card, empty);
+                    });
+                });
+            }
+
+            // ============================================
+            // MODAL HANDLING
+            // ============================================
+            function openAddModal(status = 'not-started') {
+                editingTaskId = null;
+                modalTitle.textContent = 'Add Task';
+                taskForm.reset();
+                taskIdInput.value = '';
+                taskStatusInput.value = status;
+                taskGoogleIdInput.value = '';
+                taskGoogleTaskListIdInput.value = '';
+                taskGoogleEtagInput.value = '';
+                taskStatusSelect.value = status;
+                
+                // Set default task list
+                const taskListSelect = document.getElementById('taskListSelect');
+                if (taskListSelect && defaultTaskListId) {
+                    taskListSelect.value = defaultTaskListId;
+                }
+                
+                deleteBtn.style.display = 'none';
+                saveBtn.textContent = 'Save Task';
+                clearErrors();
+                openModal();
+                setTimeout(() => taskTitleInput.focus(), 100);
+            }
+
+            function openEditModal(taskId) {
+                const task = tasks.find(t => t.id === taskId);
+                if (!task) return;
+
+                editingTaskId = taskId;
+                modalTitle.textContent = 'Edit Task';
+                taskIdInput.value = task.id;
+                taskStatusInput.value = task.status;
+                taskGoogleIdInput.value = task.googleId || '';
+                taskGoogleTaskListIdInput.value = task.googleTaskListId || '';
+                taskGoogleEtagInput.value = task.googleEtag || '';
+                taskTitleInput.value = task.title;
+                taskDueDateInput.value = task.dueDate || '';
+                taskNotesInput.value = task.notes || '';
+                taskStatusSelect.value = task.status;
+                
+                // Set task list
+                const taskListSelect = document.getElementById('taskListSelect');
+                if (taskListSelect && task.googleTaskListId) {
+                    taskListSelect.value = task.googleTaskListId;
+                } else if (taskListSelect && defaultTaskListId) {
+                    taskListSelect.value = defaultTaskListId;
+                }
+                
+                deleteBtn.style.display = 'block';
+                saveBtn.textContent = 'Save Changes';
+                clearErrors();
+                openModal();
+                setTimeout(() => taskTitleInput.focus(), 100);
+            }
+
+            function openModal() {
+                modal.classList.add('open');
+                document.body.style.overflow = 'hidden';
+                trapFocus(modal);
+            }
+
+            function closeModal() {
+                modal.classList.remove('open');
+                document.body.style.overflow = '';
+                editingTaskId = null;
+            }
+
+            function clearErrors() {
+                taskTitleInput.classList.remove('error');
+                titleError.textContent = '';
+            }
+
+            function validateForm() {
+                clearErrors();
+                let valid = true;
+
+                if (!taskTitleInput.value.trim()) {
+                    taskTitleInput.classList.add('error');
+                    titleError.textContent = 'Task description is required';
+                    valid = false;
+                }
+                
+                // Validate task list selection
+                const taskListSelect = document.getElementById('taskListSelect');
+                const taskListError = document.getElementById('taskListError');
+                if (!taskListSelect || !taskListSelect.value) {
+                    if (taskListError) {
+                        taskListError.textContent = 'Please select a task list';
+                    }
+                    taskListSelect?.classList.add('error');
+                    valid = false;
+                } else {
+                    if (taskListError) {
+                        taskListError.textContent = '';
+                    }
+                    taskListSelect?.classList.remove('error');
+                }
+
+                return valid;
+            }
+
+            // ============================================
+            // TASK OPERATIONS
+            // ============================================
+            // Dirty state tracking functions
+            function markUnsyncedChanges() {
+                hasUnsyncedChanges = true;
+                updateSyncButtonState();
+            }
+            
+            function clearUnsyncedChanges() {
+                hasUnsyncedChanges = false;
+                updateSyncButtonState();
+            }
+            
+            function updateSyncButtonState() {
+                const syncBtn = document.getElementById('syncBtn');
+                if (syncBtn) {
+                    if (hasUnsyncedChanges) {
+                        syncBtn.classList.add('dirty');
+                        syncBtn.title = 'Unsynced changes - click to sync';
+                    } else {
+                        syncBtn.classList.remove('dirty');
+                        syncBtn.title = 'Sync with Google Tasks';
+                    }
+                }
+            }
+
+            async function saveTask() {
+                if (!validateForm()) return;
+
+                const taskListSelect = document.getElementById('taskListSelect');
+                const taskData = {
+                    title: taskTitleInput.value.trim(),
+                    dueDate: taskDueDateInput.value || null,
+                    notes: taskNotesInput.value.trim() || null,
+                    status: taskStatusSelect.value,
+                    googleId: taskGoogleIdInput.value || null,
+                    googleTaskListId: taskListSelect?.value || null,
+                    googleEtag: taskGoogleEtagInput.value || null
+                };
+
+                if (editingTaskId) {
+                    // Update existing task
+                    const index = tasks.findIndex(t => t.id === editingTaskId);
+                    if (index !== -1) {
+                        const oldStatus = tasks[index].status;
+                        const oldGoogleId = tasks[index].googleId;
+                        const oldTaskListId = tasks[index].googleTaskListId;
+                        
+                        tasks[index] = { 
+                            ...tasks[index], 
+                            ...taskData, 
+                            updatedAt: new Date().toISOString() 
+                        };
+                        
+                        // If task list changed and we have Google ID, we need to move the task in Google
+                        if (oldTaskListId !== taskData.googleTaskListId && tasks[index].googleId) {
+                            // Delete from old list and create in new list
+                            await deleteGoogleTask(tasks[index]);
+                            tasks[index].googleId = null;
+                            tasks[index].googleEtag = null;
+                            await createGoogleTask(tasks[index]);
+                        }
+                        // If status changed to completed and we have Google ID, sync to Google
+                        else if (oldStatus !== 'completed' && taskData.status === 'completed' && tasks[index].googleId) {
+                            await updateGoogleTask(tasks[index]);
+                        }
+                        // If status changed from completed to not-completed and we have Google ID
+                        else if (oldStatus === 'completed' && taskData.status !== 'completed' && tasks[index].googleId) {
+                            await updateGoogleTask(tasks[index]);
+                        }
+                        // If new task (no Google ID) but user is signed in, create in Google
+                        else if (!oldGoogleId && googleAuthToken && taskData.status !== 'archived') {
+                            await createGoogleTask(tasks[index]);
+                        }
+                        
+                        // Mark as having unsynced changes if not synced to Google
+                        if (googleAuthToken) {
+                            markUnsyncedChanges();
+                        }
+                    }
+                } else {
+                    // Create new task
+                    const newTask = {
+                        id: generateId(),
+                        ...taskData,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    tasks.push(newTask);
+                    
+                    // If user is signed in, create in Google
+                    if (googleAuthToken && taskData.status !== 'archived') {
+                        await createGoogleTask(newTask);
+                    }
+                    
+                    // Mark as having unsynced changes if not synced to Google
+                    if (googleAuthToken) {
+                        markUnsyncedChanges();
+                    }
+                }
+
+                saveTasks();
+                renderBoard();
+                closeModal();
+            }
+
+            async function deleteTask(taskId) {
+                if (!confirm('Are you sure you want to delete this task?')) return;
+
+                const task = tasks.find(t => t.id === taskId);
+                
+                // Delete from Google if it exists there
+                if (task?.googleId) {
+                    await deleteGoogleTask(task);
+                }
+
+                tasks = tasks.filter(t => t.id !== taskId);
+                saveTasks();
+                renderBoard();
+            }
+
+            // ============================================
+            // DRAG AND DROP
+            // ============================================
+            function handleDragStart(e) {
+                draggedTask = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', this.dataset.taskId);
+                
+                // Create drag preview
+                const rect = this.getBoundingClientRect();
+                const preview = this.cloneNode(true);
+                preview.classList.add('drag-preview');
+                preview.style.position = 'absolute';
+                preview.style.top = '-1000px';
+                document.body.appendChild(preview);
+                e.dataTransfer.setDragImage(preview, e.clientX - rect.left, e.clientY - rect.top);
+                setTimeout(() => document.body.removeChild(preview), 0);
+            }
+
+            function handleDragEnd(e) {
+                this.classList.remove('dragging');
+                draggedTask = null;
+                
+                // Remove drag-over from all columns
+                Object.values(columns).forEach(col => {
+                    col.content.classList.remove('drag-over');
+                });
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('drag-over');
+                dragOverColumn = this;
+            }
+
+            function handleDragLeave(e) {
+                // Only remove if leaving the column entirely
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('drag-over');
+                }
+            }
+
+            function handleDrop(e, status) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                const taskId = e.dataTransfer.getData('text/plain');
+                if (taskId) {
+                    moveTask(taskId, status);
+                }
+            }
+
+            function handleCardDragOver(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                this.classList.add('drag-over');
+            }
+
+            function handleCardDragLeave(e) {
+                if (!this.contains(e.relatedTarget)) {
+                    this.classList.remove('drag-over');
+                }
+            }
+
+            function handleCardDrop(e) {
+                e.preventDefault();
+                this.classList.remove('drag-over');
+                
+                const targetTaskId = this.dataset.taskId;
+                const sourceTaskId = e.dataTransfer.getData('text/plain');
+                
+                if (sourceTaskId && sourceTaskId !== targetTaskId) {
+                    reorderTasks(sourceTaskId, targetTaskId);
+                }
+            }
+
+            function handleCardKeyDown(e) {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    const taskId = this.dataset.taskId;
+                    openEditModal(taskId);
+                } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    const taskId = this.dataset.taskId;
+                    deleteTask(taskId);
+                }
+            }
+
+            async function moveTask(taskId, newStatus) {
+                const task = tasks.find(t => t.id === taskId);
+                if (task && task.status !== newStatus) {
+                    const oldStatus = task.status;
+                    task.status = newStatus;
+                    task.updatedAt = new Date().toISOString();
+                    
+                    // Sync to Google if signed in
+                    if (googleAuthToken && task.googleId) {
+                        await updateGoogleTask(task);
+                    } else if (googleAuthToken && !task.googleId && newStatus !== 'archived') {
+                        await createGoogleTask(task);
+                    }
+                    
+                    // Mark as having unsynced changes if signed in
+                    if (googleAuthToken) {
+                        markUnsyncedChanges();
+                    }
+                    
+                    saveTasks();
+                    renderBoard();
+                }
+            }
+
+            function reorderTasks(sourceId, targetId) {
+                const sourceIndex = tasks.findIndex(t => t.id === sourceId);
+                const targetIndex = tasks.findIndex(t => t.id === targetId);
+                
+                if (sourceIndex !== -1 && targetIndex !== -1 && tasks[sourceIndex].status === tasks[targetIndex].status) {
+                    const [removed] = tasks.splice(sourceIndex, 1);
+                    tasks.splice(targetIndex, 0, removed);
+                    saveTasks();
+                    renderBoard();
+                }
+            }
+
+            // ============================================
+            // FOCUS TRAP
+            // ============================================
+            function trapFocus(element) {
+                const focusableElements = element.querySelectorAll(
+                    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+                );
+                const firstElement = focusableElements[0];
+                const lastElement = focusableElements[focusableElements.length - 1];
+
+                element.addEventListener('keydown', function handleTab(e) {
+                    if (e.key !== 'Tab') return;
+
+                    if (e.shiftKey) {
+                        if (document.activeElement === firstElement) {
+                            e.preventDefault();
+                            lastElement.focus();
+                        }
+                    } else {
+                        if (document.activeElement === lastElement) {
+                            e.preventDefault();
+                            firstElement.focus();
+                        }
+                    }
+                });
+            }
+
+            // ============================================
+            // ARCHIVED TOGGLE
+            // ============================================
+            function toggleArchived() {
+                const isCollapsed = archivedColumn.classList.toggle('collapsed');
+                archivedToggle.setAttribute('aria-expanded', !isCollapsed);
+            }
+
+            // ============================================
+            // EVENT LISTENERS
+            // ============================================
+            function attachEventListeners() {
+                // Add task buttons
+                addTaskBtn.addEventListener('click', () => openAddModal('not-started'));
+                
+                addTaskLinks.forEach(link => {
+                    link.addEventListener('click', () => {
+                        const status = link.dataset.column;
+                        openAddModal(status);
+                    });
+                });
+
+                // Modal controls
+                modalClose.addEventListener('click', closeModal);
+                cancelBtn.addEventListener('click', closeModal);
+                saveBtn.addEventListener('click', saveTask);
+                deleteBtn.addEventListener('click', () => {
+                    if (editingTaskId) {
+                        deleteTask(editingTaskId);
+                        closeModal();
+                    }
+                });
+
+                // Close modal on overlay click
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        closeModal();
+                    }
+                });
+
+                // Close modal on Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && modal.classList.contains('open')) {
+                        closeModal();
+                    }
+                });
+
+                // Form submit
+                taskForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    saveTask();
+                });
+
+                // Clear error on input
+                taskTitleInput.addEventListener('input', () => {
+                    if (taskTitleInput.classList.contains('error')) {
+                        clearErrors();
+                    }
+                });
+
+                // Column drop zones
+                Object.keys(columns).forEach(status => {
+                    const content = columns[status].content;
+                    content.addEventListener('dragover', (e) => handleDragOver.call(content, e, status));
+                    content.addEventListener('dragleave', (e) => handleDragLeave.call(content, e));
+                    content.addEventListener('drop', (e) => handleDrop.call(content, e, status));
+                });
+
+                // Archived toggle
+                archivedToggle.addEventListener('click', toggleArchived);
+
+                // Google Auth buttons
+                loginBtn.addEventListener('click', handleLogin);
+                logoutBtn.addEventListener('click', handleLogout);
+                syncBtn.addEventListener('click', syncToGoogle);
+            }
+
+            // ============================================
+            // INITIALIZATION
+            // ============================================
+            async function init() {
+                loadTasks();
+                renderBoard();
+                attachEventListeners();
+                
+                // Add beforeunload listener to sync unsaved changes
+                window.addEventListener('beforeunload', (e) => {
+                    if (hasUnsyncedChanges && googleAuthToken) {
+                        e.preventDefault();
+                        e.returnValue = 'You have unsynced changes. Are you sure you want to leave?';
+                        return e.returnValue;
+                    }
+                });
+                
+                // Initialize Google Auth
+                await initGoogleAuth();
+            }
+
+            // Initialize
+            init();
+
+            // Return public API
+            return {
+                init,
+                renderBoard,
+                openAddModal,
+                openEditModal,
+                closeModal,
+                saveTask,
+                deleteTask,
+                moveTask,
+                reorderTasks,
+                syncToGoogle
+            };
+        })();
+    </script>
+</body>
+</html>
