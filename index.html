@@ -1437,38 +1437,47 @@ REPLACE
             }
 
             function initGoogleApiClient() {
-                // Build init config - API key is optional (can use OAuth token only)
-                const initConfig = {
-                    discoveryDocs: [GOOGLE_DISCOVERY_DOC],
-                };
-                if (GOOGLE_API_KEY && GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
-                    initConfig.apiKey = GOOGLE_API_KEY;
-                }
-                
-                window.gapi.client.init(initConfig).then(() => {
-                    googleApiReady = true;
-                    console.log('Google Tasks API initialized successfully');
+                try {
+                    // Build init config - API key is optional (can use OAuth token only)
+                    const initConfig = {
+                        discoveryDocs: [GOOGLE_DISCOVERY_DOC],
+                    };
+                    if (GOOGLE_API_KEY && GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
+                        initConfig.apiKey = GOOGLE_API_KEY;
+                    }
                     
-                    // Check if user is already signed in
-                    const tokenClient = window.google.accounts.oauth2.initTokenClient({
-                        client_id: GOOGLE_CLIENT_ID,
-                        scope: GOOGLE_SCOPES,
-                        callback: (tokenResponse) => {
-                            if (tokenResponse.access_token) {
-                                googleAuthToken = tokenResponse.access_token;
-                                window.gapi.client.setToken({ access_token: googleAuthToken });
-                                loadUserInfo();
+                    console.log('Initializing Google Tasks API...');
+                    
+                    window.gapi.client.init(initConfig).then(() => {
+                        googleApiReady = true;
+                        console.log('Google Tasks API initialized successfully');
+                        
+                        // Check if user is already signed in
+                        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+                            client_id: GOOGLE_CLIENT_ID,
+                            scope: GOOGLE_SCOPES,
+                            callback: (tokenResponse) => {
+                                if (tokenResponse.access_token) {
+                                    googleAuthToken = tokenResponse.access_token;
+                                    window.gapi.client.setToken({ access_token: googleAuthToken });
+                                    loadUserInfo();
+                                }
                             }
-                        }
+                        });
+                        
+                        // Try to get token silently
+                        tokenClient.requestAccessToken({ prompt: '' });
+                    }).catch(err => {
+                        console.error('Google API client init failed:', err);
+                        googleApiReady = false;
+                        const errorMsg = err.message || err.result?.error?.message || 'Unknown error';
+                        showToast(`Failed to initialize Google API: ${errorMsg}. Please refresh the page.`, 'error');
                     });
-                    
-                    // Try to get token silently
-                    tokenClient.requestAccessToken({ prompt: '' });
-                }).catch(err => {
-                    console.error('Google API client init failed:', err);
+                } catch (err) {
+                    console.error('Exception during Google API initialization:', err);
                     googleApiReady = false;
-                    showToast('Failed to initialize Google API. Check console for details and refresh the page.', 'error');
-                });
+                    showToast('Failed to initialize Google API. Please check your configuration and refresh.', 'error');
+                }
             }
 
             function handleGoogleCredentialResponse(response) {
