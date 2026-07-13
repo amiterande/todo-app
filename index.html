@@ -1413,6 +1413,15 @@ REPLACE
                             resolve();
                         }
                     }, 100);
+                    
+                    // Timeout after 15 seconds
+                    setTimeout(() => {
+                        clearInterval(checkGIS);
+                        if (!window.google || !window.google.accounts) {
+                            console.error('Google Identity Services failed to load');
+                            showToast('Google Sign-In failed to load. Please check your internet connection and refresh.', 'error');
+                        }
+                    }, 15000);
                 });
             }
 
