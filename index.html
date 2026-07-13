@@ -1425,6 +1425,13 @@ REPLACE
                     cancel_on_tap_outside: true
                 });
 
+                // Check if gapi is available
+                if (!window.gapi) {
+                    console.error('Google API library (gapi) not loaded');
+                    showToast('Google API library failed to load. Please check your internet connection and refresh.', 'error');
+                    return;
+                }
+
                 // Also load the Google API client for Tasks API
                 window.gapi.load('client', initGoogleApiClient);
             }
@@ -1459,7 +1466,8 @@ REPLACE
                     tokenClient.requestAccessToken({ prompt: '' });
                 }).catch(err => {
                     console.error('Google API client init failed:', err);
-                    showToast('Failed to initialize Google API. Please refresh the page.', 'error');
+                    googleApiReady = false;
+                    showToast('Failed to initialize Google API. Check console for details and refresh the page.', 'error');
                 });
             }
 
