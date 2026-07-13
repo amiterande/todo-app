@@ -1425,15 +1425,26 @@ REPLACE
                     cancel_on_tap_outside: true
                 });
 
-                // Check if gapi is available
-                if (!window.gapi) {
-                    console.error('Google API library (gapi) not loaded');
-                    showToast('Google API library failed to load. Please check your internet connection and refresh.', 'error');
-                    return;
-                }
-
-                // Also load the Google API client for Tasks API
-                window.gapi.load('client', initGoogleApiClient);
+                // Wait for gapi to be fully loaded
+                const checkGapi = setInterval(() => {
+                    if (window.gapi && window.gapi.client) {
+                        clearInterval(checkGapi);
+                        console.log('Google API library loaded');
+                        initGoogleApiClient();
+                    } else if (window.gapi && !window.gapi.client) {
+                        // gapi is loading but client not ready yet
+                        console.log('Waiting for Google API client to load...');
+                    }
+                }, 100);
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    clearInterval(checkGapi);
+                    if (!googleApiReady) {
+                        console.error('Google API library failed to load within timeout');
+                        showToast('Google API library failed to load. Please check your internet connection and refresh.', 'error');
+                    }
+                }, 10000);
             }
 
             function initGoogleApiClient() {
