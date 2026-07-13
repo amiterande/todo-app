@@ -1468,6 +1468,12 @@ REPLACE
 
             function initGoogleApiClient() {
                 try {
+                    // Log configuration for debugging
+                    console.log('Initializing Google Tasks API...');
+                    console.log('Client ID:', GOOGLE_CLIENT_ID);
+                    console.log('Discovery Doc:', GOOGLE_DISCOVERY_DOC);
+                    console.log('API Key:', GOOGLE_API_KEY ? 'Set' : 'Not set');
+                    
                     // Build init config - API key is optional (can use OAuth token only)
                     const initConfig = {
                         discoveryDocs: [GOOGLE_DISCOVERY_DOC],
@@ -1475,8 +1481,6 @@ REPLACE
                     if (GOOGLE_API_KEY && GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
                         initConfig.apiKey = GOOGLE_API_KEY;
                     }
-                    
-                    console.log('Initializing Google Tasks API...');
                     
                     window.gapi.client.init(initConfig).then(() => {
                         googleApiReady = true;
@@ -1500,15 +1504,29 @@ REPLACE
                     }).catch(err => {
                         console.error('Google API client init failed:', err);
                         googleApiReady = false;
-                        const errorMsg = err.message || err.result?.error?.message || 'Unknown error';
-                        showToast(`Failed to initialize Google API: ${errorMsg}. Click the sync button to retry.`, 'error');
+                        
+                        // Provide detailed error message
+                        let errorMsg = 'Unknown error';
+                        if (err.result && err.result.error) {
+                            errorMsg = err.result.error.message || err.result.error.status;
+                        } else if (err.message) {
+                            errorMsg = err.message;
+                        }
+                        
+                        console.error('Error details:', {
+                            message: err.message,
+                            result: err.result,
+                            stack: err.stack
+                        });
+                        
+                        showToast(`Google API init failed: ${errorMsg}. Check console (F12) for details. You may need to configure config.local.js with your Google Client ID.`, 'error', 8000);
                         // Enable sync button so user can retry
                         syncBtn.disabled = false;
                     });
                 } catch (err) {
                     console.error('Exception during Google API initialization:', err);
                     googleApiReady = false;
-                    showToast('Failed to initialize Google API. Click the sync button to retry.', 'error');
+                    showToast('Failed to initialize Google API. Check console (F12) for details.', 'error');
                     // Enable sync button so user can retry
                     syncBtn.disabled = false;
                 }
