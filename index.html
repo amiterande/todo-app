@@ -1405,23 +1405,34 @@ REPLACE
             // ============================================
             async function initGoogleAuth() {
                 return new Promise((resolve) => {
-                    // Wait for Google Identity Services to load
-                    const checkGIS = setInterval(() => {
-                        if (window.google && window.google.accounts) {
-                            clearInterval(checkGIS);
+                    // Wait for both Google Identity Services and gapi to load
+                    const checkLibraries = setInterval(() => {
+                        const gisLoaded = window.google && window.google.accounts;
+                        const gapiLoaded = window.gapi && window.gapi.client;
+                        
+                        if (gisLoaded && gapiLoaded) {
+                            clearInterval(checkLibraries);
+                            console.log('All Google libraries loaded');
                             initializeGIS();
                             resolve();
+                        } else if (!gisLoaded) {
+                            console.log('Waiting for Google Identity Services...');
+                        } else if (!gapiLoaded) {
+                            console.log('Waiting for Google API client...');
                         }
                     }, 100);
                     
-                    // Timeout after 15 seconds
+                    // Timeout after 20 seconds
                     setTimeout(() => {
-                        clearInterval(checkGIS);
-                        if (!window.google || !window.google.accounts) {
-                            console.error('Google Identity Services failed to load');
-                            showToast('Google Sign-In failed to load. Please check your internet connection and refresh.', 'error');
+                        clearInterval(checkLibraries);
+                        const gisLoaded = window.google && window.google.accounts;
+                        const gapiLoaded = window.gapi && window.gapi.client;
+                        
+                        if (!gisLoaded || !gapiLoaded) {
+                            console.error('Google libraries failed to load within timeout');
+                            showToast('Google services failed to load. Please check your internet connection, ensure you\'re on localhost/HTTPS, and refresh the page.', 'error');
                         }
-                    }, 15000);
+                    }, 20000);
                 });
             }
 
@@ -1434,14 +1445,13 @@ REPLACE
                     cancel_on_tap_outside: true
                 });
 
-                // Wait for gapi to be fully loaded
+                // Wait for gapi to be fully loaded and initialized
                 const checkGapi = setInterval(() => {
                     if (window.gapi && window.gapi.client) {
                         clearInterval(checkGapi);
-                        console.log('Google API library loaded');
+                        console.log('Google API library loaded, initializing...');
                         initGoogleApiClient();
                     } else if (window.gapi && !window.gapi.client) {
-                        // gapi is loading but client not ready yet
                         console.log('Waiting for Google API client to load...');
                     }
                 }, 100);
@@ -1491,12 +1501,16 @@ REPLACE
                         console.error('Google API client init failed:', err);
                         googleApiReady = false;
                         const errorMsg = err.message || err.result?.error?.message || 'Unknown error';
-                        showToast(`Failed to initialize Google API: ${errorMsg}. Please refresh the page.`, 'error');
+                        showToast(`Failed to initialize Google API: ${errorMsg}. Click the sync button to retry.`, 'error');
+                        // Enable sync button so user can retry
+                        syncBtn.disabled = false;
                     });
                 } catch (err) {
                     console.error('Exception during Google API initialization:', err);
                     googleApiReady = false;
-                    showToast('Failed to initialize Google API. Please check your configuration and refresh.', 'error');
+                    showToast('Failed to initialize Google API. Click the sync button to retry.', 'error');
+                    // Enable sync button so user can retry
+                    syncBtn.disabled = false;
                 }
             }
 
@@ -2736,6 +2750,22 @@ REPLACE
             // INITIALIZATION
             // ============================================
             async function init() {
+                // Wait for Google API scripts to load
+                const maxScriptWait = 15000; // 15 seconds
+                const scriptStartTime = Date.now();
+                
+                while ((!window.google || !window.gapi) && (Date.now() - scriptStartTime) < maxScriptWait) {
+                    console.log('Waiting for Google API scripts to load...');
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                
+                if (!window.google || !window.gapi) {
+                    console.error('Google API scripts failed to load');
+                    showToast('Google services failed to load. Please check your internet connection and refresh the page.', 'error');
+                } else {
+                    console.log('Google API scripts loaded successfully');
+                }
+                
                 loadTasks();
                 renderBoard();
                 attachEventListeners();
@@ -2763,7 +2793,9 @@ REPLACE
                 });
                 
                 // Initialize Google Auth
-                await initGoogleAuth();
+                if (window.google && window.gapi) {
+                    await initGoogleAuth();
+                }
                 
                 // Try to restore session after auth initialization
                 const savedUser = loadSession();
