@@ -1287,6 +1287,22 @@ REPLACE
             let defaultTaskListId = null;
             let isSyncing = false;
             let syncInProgress = false;
+            let googleApiReady = false;
+            let googleApiInitPromise = null;
+            
+            // Helper function to wait for Google API to be ready
+            async function waitForGoogleApi() {
+                const maxWait = 10000; // 10 seconds
+                const startTime = Date.now();
+                
+                while (!googleApiReady && (Date.now() - startTime) < maxWait) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                if (!googleApiReady) {
+                    throw new Error('Google Tasks API failed to initialize. Please refresh the page.');
+                }
+            }
             
             // Persistent session state
             const SESSION_STORAGE_KEY = 'taskBoardSession';
@@ -1423,6 +1439,9 @@ REPLACE
                 }
                 
                 window.gapi.client.init(initConfig).then(() => {
+                    googleApiReady = true;
+                    console.log('Google Tasks API initialized successfully');
+                    
                     // Check if user is already signed in
                     const tokenClient = window.google.accounts.oauth2.initTokenClient({
                         client_id: GOOGLE_CLIENT_ID,
@@ -1432,7 +1451,6 @@ REPLACE
                                 googleAuthToken = tokenResponse.access_token;
                                 window.gapi.client.setToken({ access_token: googleAuthToken });
                                 loadUserInfo();
-                                loadTaskLists();
                             }
                         }
                     });
@@ -1441,7 +1459,7 @@ REPLACE
                     tokenClient.requestAccessToken({ prompt: '' });
                 }).catch(err => {
                     console.error('Google API client init failed:', err);
-                    showError('Failed to initialize Google API. Check console for details.');
+                    showToast('Failed to initialize Google API. Please refresh the page.', 'error');
                 });
             }
 
@@ -1515,17 +1533,8 @@ REPLACE
 
             async function loadTaskLists() {
                 try {
-                    // Wait for Tasks API to be ready (with timeout)
-                    const maxWait = 5000; // 5 seconds
-                    const startTime = Date.now();
-                    
-                    while (!window.gapi.client.tasks && (Date.now() - startTime) < maxWait) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                    
-                    if (!window.gapi.client.tasks) {
-                        throw new Error('Google Tasks API not initialized. Please refresh the page and try again.');
-                    }
+                    // Wait for Google API to be ready
+                    await waitForGoogleApi();
                     
                     const response = await window.gapi.client.tasks.tasklists.list();
                     googleTaskLists = response.result.items || [];
